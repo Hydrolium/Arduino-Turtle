@@ -39,7 +39,6 @@ SWIMMING
 STRUGGLING
 */
 
-
 template <typename Target>
 class MotionManager: public Updatable {
 private:

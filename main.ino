@@ -1,4 +1,4 @@
-#define IR_USE_AVR_TIMER2 // 서보모터 충돌 방지(확인 필요)
+#define IR_USE_AVR_TIMER2 // 서보모터와 TIMER1에서 충돌 방지를 위해 적외선 센서는 TIMER2사용
 
 #include "Component.h"
 #include "TurtleMotion.h"
@@ -13,13 +13,13 @@ constexpr byte RFID_1_START = 192;
 
 아두이노 핀 배치
 D2(LED - 왼쪽 눈), (LED - 오른쪽 눈)
-D3(서보모터 - 목) 
+D3
 D4
 D5(서보모터 - 오른쪽 앞다리)
 D6(서보모터 - 오른쪽 뒷다리) 
 D7(기울기센서)
 D8(RFID RST)
-D9
+D9(서보모터 - 목)
 D10(RFID SDA)
 D11(RFID MOSI)
 D12(RFID MISO)
@@ -31,7 +31,17 @@ A2(조이스틱 SW)
 A3(초음파 Trig)
 A4(초음파 Echo)
 A5(적외선 센서)
+*/
 
+/*
+거북이 로봇
+기능
+1. V 초음파 센서로 근거리 감지 되면 목 넣기
+2. V RFID로 목을 넣고 있을 때 뺴기
+3. 조이스틱으로 꼬리 만지면 좋아하기
+4. V 기울기 센서로 뒤집히면 버둥거리기
+5. 조도 센서로 강한 빛이 감지되면 일광욕하기
+6. 적외선 수신기로 각 모드를 강제 실행
 */
 
 void onRFIDRead(const byte* uid, byte uidSize);
@@ -43,7 +53,7 @@ void onTilt(bool);
 LED mood(4);
 Buzzer mouse(6);
 
-TurtleHead tHead(3, 2);
+TurtleHead tHead(9, 2);
 TurtleLegs tLegs(5, 4);
 
 SonarSensor eyeSensor(A3, A4, 500, onDistanceDetected);
@@ -75,7 +85,6 @@ void onRFIDRead(const byte* uid, byte uidSize) {
 void onJoyStickMove(uint16_t x, uint16_t y, bool sw) {
   mood.turnOn();
   Serial.println(x);
-  // 0-1024 
   float fre = ((int)x + (int)y)/2.0f;
   mouse.play(fre, 1000);
 }
@@ -86,9 +95,7 @@ void onDistanceDetected(uint16_t distance) {
   if(distance < 20) {
     if(headMotion.getTarget().getNeck().getAngle() != MotionSetting::MAX_NECK_ANGLE) headMotion.attach(MotionHandler::neckIn);
   } else if(distance >= 20) {
-    if(headMotion.getTarget().getNeck().getAngle() != MotionSetting::MIN_NECK_ANGLE) {
-      headMotion.attach(MotionHandler::neckOut);
-    }
+    if(headMotion.getTarget().getNeck().getAngle() != MotionSetting::MIN_NECK_ANGLE) headMotion.attach(MotionHandler::neckOut);
   }  
 }
 

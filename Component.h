@@ -195,7 +195,7 @@ private:
 
   const uint16_t interval;
   const byte speed;
-  unsigned long previousMillis = 0;
+  unsigned long lastMillis = 0;
 
   int targetSteps = 0;
   bool stepDirection = true; // true: 정회전, false: 역회전
@@ -216,8 +216,8 @@ public:
 
     if(targetSteps <= 0) return;
 
-    if (currentMillis - previousMillis < interval) return;
-    previousMillis = currentMillis;
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
 
     stepper.step(stepDirection ? 1 : -1);
     targetSteps--;
@@ -299,9 +299,9 @@ class BinarySensor: public Initializable, public Updatable {
 private:
   const byte sensorPin;
   const uint16_t interval;
-  unsigned long previousMillis = 0;
+  unsigned long lastMillis = 0;
 
-  bool previousState = HIGH;
+  bool lastState = HIGH;
 
   const bool callHandlerAlways;
 
@@ -313,25 +313,25 @@ public:
 
   void init() override {
     pinMode(sensorPin, INPUT_PULLUP);
-    previousState = digitalRead(sensorPin);
+    lastState = digitalRead(sensorPin);
   }
 
   bool getState() const {
-    return previousState;
+    return lastState;
   }
 
   void update(unsigned long currentMillis) override {
 
     if(handler == nullptr) return;
 
-    if (currentMillis - previousMillis < interval) return;
-    previousMillis = currentMillis;
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
 
     bool currentState = digitalRead(sensorPin);
 
-    if(callHandlerAlways || previousState != currentState) handler(currentState);
+    if(callHandlerAlways || lastState != currentState) handler(currentState);
 
-    previousState = currentState;
+    lastState = currentState;
   }
 
 };
@@ -344,20 +344,21 @@ private:
   const byte trigPin;
   const byte echoPin;
   const uint16_t interval;
-  unsigned long previousMillis = 0;
+  unsigned long lastMillis = 0;
 
   byte stepStage = 0;
   unsigned long triggerStart;
   unsigned long echoStart;
   bool lastEchoState = LOW;
 
-  uint16_t distance = 999;
+  uint16_t lastDistance = 999;
 
+  const bool callHandlerAlways;
   void (*handler)(uint16_t);
 
 public:
 
-  SonarSensor(byte trig, byte echo, unsigned i, void (*hd)(uint16_t)): trigPin(trig), echoPin(echo), interval(i), handler(hd) {}
+  SonarSensor(byte trig, byte echo, unsigned i, void (*hd)(uint16_t), bool cha = false): trigPin(trig), echoPin(echo), interval(i), handler(hd), callHandlerAlways(cha) {}
 
   void init() override {
     pinMode(trigPin, OUTPUT);
@@ -365,14 +366,14 @@ public:
   }
 
   uint16_t getDistance() const {
-    return distance;
+    return lastDistance;
   }
 
   void update(unsigned long currentMillis) override {
 
     // if (handler == nullptr) return;
-    // if (millis() - previousMillis < interval) return;
-    // previousMillis = millis();
+    // if (millis() - lastMillis < interval) return;
+    // lastMillis = millis();
 
     // digitalWrite(trigPin, LOW);
     // delayMicroseconds(2);
@@ -395,8 +396,8 @@ public:
     
     if (handler == nullptr) return;
     if (stepStage == 0) {
-      if (currentMillis - previousMillis < interval) return;
-      previousMillis = currentMillis;
+      if (currentMillis - lastMillis < interval) return;
+      lastMillis = currentMillis;
       digitalWrite(trigPin, HIGH);
       triggerStart = currentMicros;
       stepStage = 1;
@@ -418,17 +419,22 @@ public:
         echoStart = currentMicros;
       } else if(lastEchoState == HIGH && currentEchoState == LOW) {
         unsigned long duration = currentMicros - echoStart;
-        distance = duration / 58;
+
+        unsigned long distance = duration / 58;
         
-        if(distance > 0 && distance < 400) handler(distance);
-        else distance = 999;
+        if(distance > 0 && distance < 400) {
+          if(callHandlerAlways || distance != lastDistance) handler(distance);
+          lastDistance = distance;
+        }
+        // else distance = 999;
+
         stepStage = 0;
       }
 
       lastEchoState = currentEchoState;
 
       if(currentMicros - triggerStart > 30000) {
-        distance = 999;
+        // lastDistance = 999;
         stepStage = 0;
       }
     }
@@ -443,7 +449,7 @@ private:
 
   MFRC522 mfrc522;
   const uint16_t interval;
-  unsigned long previousMillis = 0;
+  unsigned long lastMillis = 0;
 
   byte lastUid[MAX_UID_SIZE];
   byte lastUidSize = 0;
@@ -474,16 +480,14 @@ public:
 
     if (handler == nullptr) return;
 
-    if (currentMillis - previousMillis < interval) return;
-    previousMillis = currentMillis;
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
 
 
     if (!mfrc522.PICC_IsNewCardPresent()) return;
     if (!mfrc522.PICC_ReadCardSerial()) return;
 
     lastUidSize = mfrc522.uid.size;
-
-    Serial.println(12321);
 
     if(lastUidSize > MAX_UID_SIZE) lastUidSize = MAX_UID_SIZE;
 
@@ -507,7 +511,7 @@ private:
   const byte swPin;
 
   const uint16_t interval;
-  unsigned long previousMillis = 0;
+  unsigned long lastMillis = 0;
 
   int lastX = 0;
   int lastY = 0;
@@ -534,8 +538,8 @@ public:
 
     if(handler == nullptr) return;
 
-    if (currentMillis - previousMillis < interval) return;
-    previousMillis = currentMillis;
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
 
     int currentX = analogRead(xPin);
     int currentY = analogRead(yPin);
@@ -563,7 +567,7 @@ private:
   SoftwareSerial softwareSerial;
 
   const uint16_t interval;
-  unsigned long previousMillis = 0;
+  unsigned long lastMillis = 0;
 
   void (*handler)(SoftwareSerial&);
 
@@ -580,8 +584,8 @@ public:
 
     if(handler == nullptr) return;
 
-    if (currentMillis - previousMillis < interval) return;
-    previousMillis = currentMillis;
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
 
     if(softwareSerial.available()) handler(softwareSerial);
   }
@@ -591,7 +595,7 @@ public:
 class IRController: public Initializable, public Updatable {
   const byte irPin;
   const uint16_t interval;
-  unsigned long previousMillis = 0;
+  unsigned long lastMillis = 0;
 
   unsigned long lastReceived = 0;
   bool lastDecoded = false;
@@ -647,8 +651,8 @@ public:
 
     if(handler == nullptr) return;
 
-    if (currentMillis - previousMillis < interval) return;
-    previousMillis = currentMillis;
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
 
     if(IrReceiver.decode()) {
       unsigned long received = IrReceiver.decodedIRData.decodedRawData;
