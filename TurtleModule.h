@@ -1,5 +1,4 @@
-#ifndef TURTLE_MOUDLE_H
-#define TURTLE_MOUDLE_H
+#pragma once
 
 #include "Component.h"
 
@@ -42,5 +41,3 @@ public:
     return frontLeftLeg;
   }
 };
-
-#endif

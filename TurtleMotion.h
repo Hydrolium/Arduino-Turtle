@@ -1,7 +1,6 @@
-#include <stdint.h>
-#ifndef H
-#define H
+#pragma once
 
+#include <stdint.h>
 #include "Component.h"
 #include "TurtleModule.h"
 
@@ -226,6 +225,8 @@ namespace MotionHandler {
 
     return false;
   }
-}
 
-#endif
+  bool sunbathe() {
+    
+  }
+}

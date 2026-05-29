@@ -1,5 +1,4 @@
-#ifndef COMPONENT_H
-#define COMPONENT_H
+#pragma once
 
 #include <Arduino.h>
 #include <Servo.h>
@@ -684,4 +683,3 @@ public:
   }
 
 };
-#endif
