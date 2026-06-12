@@ -57,7 +57,7 @@ public:
 
 
 // 서보 모터 360
-class Servomotor360: public Initializable, public Updatable {
+class Servomotor360: public Initializable {
 private:
   Servo servo;
   const byte servoPin;
@@ -83,14 +83,6 @@ public:
   void stop() {
     servo.write(90);
   }
-
-  void update(unsigned long currentMillis) override {
-    
-    // if(currentMillis - startMillis >= duration) {
-    //   servo.write(90);
-    // }
-  }
-
 
 };
 
