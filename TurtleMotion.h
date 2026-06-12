@@ -5,27 +5,43 @@
 #include "TurtleModule.h"
 
 namespace MotionSetting {
-  constexpr uint16_t MIN_NECK_ANGLE = 0;
-  constexpr uint16_t MAX_NECK_ANGLE = 135;
 
-  constexpr uint16_t DURATION_NECK_IN_NORMAL = 1000;
-  constexpr uint16_t DELAY_NECK_IN = 1000; // 10000
+  constexpr uint16_t DURATION_NECK_IN_NORMAL = 4500;
+  constexpr uint16_t SPEED_NECK_IN = 30;
+  constexpr uint16_t DELAY_NECK_IN = 10000;
 
-  constexpr uint16_t DURATION_NECK_OUT_NORMAL = 1000;
-  constexpr uint16_t DURATION_NECK_OUT_FAST = 1200;
-  constexpr uint16_t DELAY_NECK_OUT = 500; // 5000
+  constexpr uint16_t DURATION_NECK_OUT_NORMAL = 3000;
+  constexpr uint16_t DURATION_NECK_OUT_FAST = 2000;
+  constexpr uint16_t SPEED_NECK_OUT_NORMAL = 145;
+  constexpr uint16_t SPEED_NECK_OUT_FAST = 170;
+
+  constexpr uint16_t DELAY_NECK_OUT = 5000;
 
   constexpr uint16_t MIN_SWIMMING_ANGLE = 0;
-  constexpr uint16_t MAX_SWIMMING_ANGLE = 180;
+  constexpr uint16_t MAX_SWIMMING_ANGLE = 60;
 
-  constexpr uint16_t DURATION_SWIMMING = 3000;
-  constexpr uint16_t DELAY_SWIMMING = 2000;
+  constexpr uint16_t DURATION_SWIMMING = 4000;
+  constexpr uint16_t INTERVAL_SWIMMING_EYE = 500;
+  constexpr uint16_t DELAY_SWIMMING = 0;
+
+  constexpr uint16_t DURATION_ANGRY = 2000;
+  constexpr uint16_t INTERVAL_ANGRY = 50;
+  constexpr uint16_t DELAY_ANGRY = 0;
   
   constexpr uint16_t DURATION_STRUGGLING = 1000;
   constexpr uint16_t DELAY_STRUGGLING = 0;
 
   constexpr uint16_t MIN_STRUGLLING_ANGLE = 0;
-  constexpr uint16_t MAX_STRUGLLING_ANGLE = 90;
+  constexpr uint16_t MAX_STRUGLLING_ANGLE = 70;
+
+  constexpr uint16_t DURATION_SUNBATH = 10000;
+  constexpr uint16_t DELAY_SUNBATH = 5000;
+
+  constexpr uint16_t MIN_SUNBATH_ANGLE = 0;
+  constexpr uint16_t MAX_SUNBATH_ANGLE = 50;
+
+  constexpr uint16_t DURATION_MOOD = 1000;
+  constexpr uint16_t DELAY_MOOD = 0;
 }
 
 /*
@@ -37,6 +53,7 @@ legsmotion
 SWIMMING
 STRUGGLING
 */
+enum MotionState {NORMAL, NECK_IN, NECK_IN_END, NECK_OUT, NECK_OUT_END, SUNBATH, SUNBATH_END};
 
 template <typename Target>
 class MotionManager: public Updatable {
@@ -46,6 +63,8 @@ private:
 
   unsigned long motionStart = 0;
 
+  MotionState state = NORMAL;
+
   Target &target;
 
   bool(*motion)(MotionManager&, unsigned long) = nullptr;
@@ -54,6 +73,14 @@ private:
 public:
 
   MotionManager(Target &t): target(t) {}
+
+  MotionState getState() const {
+    return state;
+  }
+
+  void setState(MotionState s) {
+    state = s;
+  }
 
   void attach(bool(*mf)(MotionManager&, unsigned long)) {
     delayDuration = 0;
@@ -140,15 +167,16 @@ namespace MotionHandler {
     TurtleHead &head = th.getTarget();
 
     if (time >= MotionSetting::DURATION_NECK_IN_NORMAL) {
-      head.getNeck().turn(MotionSetting::MAX_NECK_ANGLE);
       head.getEyes().turnOn();
+      head.getNeck().stop();
       th.setDelay(MotionSetting::DELAY_NECK_IN);
+      th.setState(NECK_IN_END);
+
       return true;
     }
 
-    head.getNeck().turn(
-      setWithRatio(smooth(time, MotionSetting::DURATION_NECK_IN_NORMAL), MotionSetting::MIN_NECK_ANGLE, MotionSetting::MAX_NECK_ANGLE)
-    );
+    th.setState(NECK_IN);
+    head.getNeck().turn(MotionSetting::SPEED_NECK_IN);
 
     return false;
   }
@@ -157,15 +185,16 @@ namespace MotionHandler {
     TurtleHead &head = th.getTarget();
 
     if (time >= MotionSetting::DURATION_NECK_OUT_NORMAL) {
-      head.getNeck().turn(MotionSetting::MIN_NECK_ANGLE);
       head.getEyes().turnOff();
+      head.getNeck().stop();
       th.setDelay(MotionSetting::DELAY_NECK_OUT);
+      th.setState(NECK_OUT_END);
+
       return true;
     }
     
-    head.getNeck().turn(
-      setWithRatio(smoothRev(time, MotionSetting::DURATION_NECK_OUT_NORMAL), MotionSetting::MIN_NECK_ANGLE, MotionSetting::MAX_NECK_ANGLE)
-    );
+    th.setState(NECK_OUT);
+    head.getNeck().turn(MotionSetting::SPEED_NECK_OUT_NORMAL);
 
     return false;
   }
@@ -175,15 +204,40 @@ namespace MotionHandler {
     TurtleHead &head = th.getTarget();
 
     if (time >= MotionSetting::DURATION_NECK_OUT_FAST) {
-      head.getNeck().turn(MotionSetting::MIN_NECK_ANGLE);
       head.getEyes().turnOff();
+      head.getNeck().stop();
+
       th.setDelay(MotionSetting::DELAY_NECK_OUT);
+      th.setState(NECK_OUT_END);
       return true;
     }
 
-    head.getNeck().turn(
-      setWithRatio(smoothRev(time, MotionSetting::DURATION_NECK_OUT_FAST), MotionSetting::MIN_NECK_ANGLE, MotionSetting::MAX_NECK_ANGLE)
-    );
+    th.setState(NECK_OUT);
+    head.getNeck().turn(MotionSetting::SPEED_NECK_OUT_FAST);
+
+    return false;
+  }
+
+  bool angry(MotionManager<TurtleHead> &th, unsigned long time) {
+
+    static unsigned long lastTime = 0;
+
+    TurtleHead &head = th.getTarget();
+    LED& eyes = head.getEyes();
+    
+    if(time >= MotionSetting::DURATION_ANGRY) {
+      th.setDelay(MotionSetting::DELAY_ANGRY);
+      eyes.turnOff();
+
+      return true;
+    }
+
+    if(time - lastTime > MotionSetting::INTERVAL_ANGRY) {
+      if(eyes.getState()) eyes.turnOff();
+      else eyes.turnOn();
+
+      lastTime = time;
+    }
 
     return false;
   }
@@ -207,6 +261,30 @@ namespace MotionHandler {
     return false;
   }
 
+  bool swimmingEyes(MotionManager<TurtleHead> &th, unsigned long time) {
+
+    static unsigned long lastTime = 0;
+
+    TurtleHead &head = th.getTarget();
+    LED& eyes = head.getEyes();
+    
+    if(time >= MotionSetting::DURATION_SWIMMING) {
+      th.setDelay(MotionSetting::DELAY_SWIMMING);
+      eyes.turnOff();
+
+      return true;
+    }
+
+    if(time - lastTime > MotionSetting::INTERVAL_SWIMMING_EYE) {
+      if(eyes.getState()) eyes.turnOff();
+      else eyes.turnOn();
+
+      lastTime = time;
+    }
+
+    return false;
+  }
+
   bool struggling(MotionManager<TurtleLegs> &tl, unsigned long time) {
     
     TurtleLegs &legs = tl.getTarget();
@@ -226,7 +304,47 @@ namespace MotionHandler {
     return false;
   }
 
-  bool sunbathe() {
+  bool sunbathe(MotionManager<TurtleLegs> &tl, unsigned long time) {
+    TurtleLegs &legs = tl.getTarget();
     
+    if(time >= MotionSetting::DURATION_SUNBATH) {
+      tl.setDelay(MotionSetting::DELAY_SUNBATH);
+      legs.getFrontRightLeg().turn(MotionSetting::MIN_SUNBATH_ANGLE);
+      legs.getFrontLeftLeg().turn(MotionSetting::MIN_SUNBATH_ANGLE);
+      return true;
+    }
+
+    unsigned long inOutDuration = MotionSetting::DURATION_SUNBATH / 10;
+
+    if(time <= inOutDuration) {
+      byte nextAngle = setWithRatio(smooth(time, inOutDuration), MotionSetting::MIN_SUNBATH_ANGLE, MotionSetting::MAX_SUNBATH_ANGLE);
+      legs.getFrontRightLeg().turn(nextAngle);
+      legs.getFrontLeftLeg().turn(nextAngle);
+    } else if(time <= MotionSetting::DURATION_SUNBATH - inOutDuration) {
+      legs.getFrontRightLeg().turn(MotionSetting::MAX_SUNBATH_ANGLE);
+      legs.getFrontLeftLeg().turn(MotionSetting::MAX_SUNBATH_ANGLE);
+    } else {
+      unsigned long elapsed = time - (MotionSetting::DURATION_SUNBATH - inOutDuration);
+      byte nextAngle = setWithRatio(smoothRev(elapsed, inOutDuration), MotionSetting::MIN_SUNBATH_ANGLE, MotionSetting::MAX_SUNBATH_ANGLE);
+      legs.getFrontRightLeg().turn(nextAngle);
+      legs.getFrontLeftLeg().turn(nextAngle);
+    }
+
+    return false;
+  }
+
+  bool moodLight(MotionManager<Relay> &tm, unsigned long time) {
+    
+    Relay &mood = tm.getTarget();
+    
+    if(time >= MotionSetting::DURATION_STRUGGLING) {
+      tm.setDelay(MotionSetting::DELAY_MOOD);
+      mood.turnOff();
+      return true;
+    }
+
+    mood.turnOn();
+
+    return false;
   }
 }

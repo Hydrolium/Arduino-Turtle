@@ -28,23 +28,97 @@ private:
   Servo servo;
   const byte servoPin;
   byte angle = 0;
+
+  const bool directionIsRight;
 public:
   static constexpr byte MAX_ANGLE = 180;
 
-  Servomotor(byte pin): servoPin(pin) { }
+  Servomotor(byte pin, bool d): servoPin(pin), directionIsRight(d) { }
 
   void init() override {
+    angle = 0;
+    servo.write((directionIsRight) ? 180 - angle : angle);
+
     servo.attach(servoPin);
-    // servo.write(0);
+
   }
 
   void turn(byte a) {
     angle = constrain(a, 0, MAX_ANGLE);
-    servo.write(a);
+    servo.write((directionIsRight) ? 180 - angle : angle);
+    
   }
 
   byte getAngle() const {
-    return angle;
+    return (directionIsRight) ? 180 - angle : angle;
+  }
+
+};
+
+
+// 서보 모터 360
+class Servomotor360: public Initializable, public Updatable {
+private:
+  Servo servo;
+  const byte servoPin;
+
+  unsigned long startMillis = 0;
+  unsigned long duration = 0;
+public:
+
+  Servomotor360(byte pin): servoPin(pin) { }
+
+  void init() override {
+    servo.attach(servoPin);
+    servo.write(90);
+  }
+
+  void turn(byte speed) {
+    servo.write(speed);
+    // startMillis = millis();
+    // duration = d;
+    
+  }
+
+  void stop() {
+    servo.write(90);
+  }
+
+  void update(unsigned long currentMillis) override {
+    
+    // if(currentMillis - startMillis >= duration) {
+    //   servo.write(90);
+    // }
+  }
+
+
+};
+
+// Relay moudle(on off)
+class Relay: public Initializable {
+protected:
+  const byte relayPin;
+  bool state = LOW;
+public:
+
+  Relay(byte pin): relayPin(pin) { }
+
+  void init() override {
+    pinMode(relayPin, OUTPUT);
+  }
+
+  bool getState() const {
+    return state;
+  }
+
+  void turnOn() {
+    state = HIGH;
+    digitalWrite(relayPin, HIGH);
+  }
+
+  void turnOff() {
+    state = LOW;
+    digitalWrite(relayPin, LOW);
   }
 
 };
@@ -335,6 +409,50 @@ public:
 
 };
 
+// 조도센서
+class PhotoResistor: public Initializable, public Updatable {
+private:
+  const byte photoResistorPin;
+  const uint16_t interval;
+  unsigned long lastMillis = 0;
+
+  uint16_t lastValue = 0;
+
+  const bool callHandlerAlways;
+
+  void (*handler)(uint16_t);
+
+public:
+
+  static constexpr uint16_t TOO_BRIGHT = 950;
+  static constexpr uint16_t TOO_DARK = 200;
+
+  PhotoResistor(byte pin, uint16_t i, void (*hd)(uint16_t), bool cha = false): photoResistorPin(pin), interval(i), handler(hd), callHandlerAlways(cha) { }
+
+  void init() override {
+    lastValue = analogRead(photoResistorPin);
+  }
+
+  bool getValue() const {
+    return lastValue;
+  }
+
+  void update(unsigned long currentMillis) override {
+
+    if(handler == nullptr) return;
+
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
+
+    uint16_t currentValue = analogRead(photoResistorPin);
+
+    if(callHandlerAlways || lastValue != currentValue) handler(currentValue);
+
+    lastValue = currentValue;
+  }
+
+};
+
 // 초음파 센서
 class SonarSensor: public Initializable, public Updatable {
 
@@ -369,75 +487,60 @@ public:
   }
 
   void update(unsigned long currentMillis) override {
+  if (handler == nullptr) return;
 
-    // if (handler == nullptr) return;
-    // if (millis() - lastMillis < interval) return;
-    // lastMillis = millis();
+  unsigned long currentMicros = micros();
 
-    // digitalWrite(trigPin, LOW);
-    // delayMicroseconds(2);
-    // digitalWrite(trigPin, HIGH);
-    // delayMicroseconds(10);
-    // digitalWrite(trigPin, LOW);
-    
-    // // 2. Echo 핀이 HIGH를 유지한 시간(마이크로초) 측정
-    // long duration = pulseIn(echoPin, HIGH);
-    
-    // // 3. 시간을 거리(cm)로 환산
-    // long distance = duration * 0.034 / 2;
-    
-    // // 4. 시리얼 모니터에 결과 출력
-    // Serial.print("Distance: ");
-    // Serial.print(distance);
-    // Serial.println(" cm");
+  // Stage 0: 대기 및 Trig 신호 발생 시작
+  if (stepStage == 0) {
+    if (currentMillis - lastMillis < interval) return;
+    lastMillis = currentMillis;
 
-    unsigned long currentMicros = micros();
-    
-    if (handler == nullptr) return;
-    if (stepStage == 0) {
-      if (currentMillis - lastMillis < interval) return;
-      lastMillis = currentMillis;
-      digitalWrite(trigPin, HIGH);
-      triggerStart = currentMicros;
-      stepStage = 1;
-      return;
-    }
-
-    if(stepStage == 1) {
-      if(currentMicros - triggerStart >= 10)  {
-        digitalWrite(trigPin, LOW);
-        stepStage = 2;
-        lastEchoState = LOW;
-      }
-      return;
-    }
-
-    if(stepStage == 2) {
-      bool currentEchoState = digitalRead(echoPin);
-      if(lastEchoState == LOW && currentEchoState == HIGH) {
-        echoStart = currentMicros;
-      } else if(lastEchoState == HIGH && currentEchoState == LOW) {
-        unsigned long duration = currentMicros - echoStart;
-
-        unsigned long distance = duration / 58;
-        
-        if(distance > 0 && distance < 400) {
-          if(callHandlerAlways || distance != lastDistance) handler(distance);
-          lastDistance = distance;
-        }
-        // else distance = 999;
-
-        stepStage = 0;
-      }
-
-      lastEchoState = currentEchoState;
-
-      if(currentMicros - triggerStart > 30000) {
-        // lastDistance = 999;
-        stepStage = 0;
-      }
-    }
+    digitalWrite(trigPin, HIGH);
+    triggerStart = currentMicros;
+    stepStage = 1;
+    return;
   }
+
+  if (stepStage == 1) {
+    while (micros() - triggerStart < 10) {
+    }
+    digitalWrite(trigPin, LOW);
+    stepStage = 2;
+    return;
+  }
+
+  if (stepStage == 2) {
+    unsigned long waitStart = micros();
+    while (digitalRead(echoPin) == LOW) {
+      if (micros() - waitStart > 30000) {
+        stepStage = 0;
+        return;
+      }
+    }
+
+    echoStart = micros();
+
+    while (digitalRead(echoPin) == HIGH) {
+      if (micros() - echoStart > 30000) {
+        stepStage = 0;
+        return;
+      }
+    }
+    
+    unsigned long duration = micros() - echoStart;
+    unsigned long distance = duration / 58;
+
+    if (distance > 0 && distance < 400) {
+      if (callHandlerAlways || distance != lastDistance) {
+        handler(distance);
+      }
+      lastDistance = distance;
+    }
+
+    stepStage = 0;
+  }
+}
 };
 
 
@@ -606,18 +709,15 @@ class IRController: public Initializable, public Updatable {
 
 public:
 
-  static constexpr unsigned long CODE_0 = 0XE916FF00;
-  static constexpr unsigned long CODE_1 = 0XF30CFF00;
-  static constexpr unsigned long CODE_2 = 0XE718FF00;
-  static constexpr unsigned long CODE_3 = 0XA15EFF00;
-  static constexpr unsigned long CODE_4 = 0XF708FF00;
-  static constexpr unsigned long CODE_5 = 0XE31CFF00;
-  static constexpr unsigned long CODE_6 = 0XA55AFF00;
-  static constexpr unsigned long CODE_7 = 0XBD42FF00;
-  static constexpr unsigned long CODE_8 = 0XAD52FF00;
-  static constexpr unsigned long CODE_9 = 0XB54AFF00;
-
-  static constexpr unsigned long CODE_EQ = 0XF609FF00;
+  static constexpr unsigned long CODE_1 = 0xBA45FF00;
+  static constexpr unsigned long CODE_2 = 0xB946FF00;
+  static constexpr unsigned long CODE_3 = 0xB847FF00;
+  static constexpr unsigned long CODE_4 = 0xBB44FF00;
+  static constexpr unsigned long CODE_5 = 0xBF40FF00;
+  static constexpr unsigned long CODE_6 = 0xBC43FF00;
+  static constexpr unsigned long CODE_7 = 0xF807FF00;
+  static constexpr unsigned long CODE_8 = 0xEA15FF00;
+  static constexpr unsigned long CODE_9 = 0xF609FF00;
 
   IRController(byte pin, uint16_t i, void (*hd)(byte, bool)): irPin(pin), interval(i), handler(hd) { }
 
@@ -631,7 +731,6 @@ public:
 
   byte toValue(unsigned long code) const {
     switch(code) {
-      case IRController::CODE_0: return 0;
       case IRController::CODE_1: return 1;
       case IRController::CODE_2: return 2;
       case IRController::CODE_3: return 3;
@@ -641,7 +740,6 @@ public:
       case IRController::CODE_7: return 7;
       case IRController::CODE_8: return 8;
       case IRController::CODE_9: return 9;
-      case IRController::CODE_EQ: return 10;
       default: return 255;
     }
   }
@@ -672,7 +770,6 @@ public:
     } else {
       if(lastDecoded && (currentMillis - lastSignalMillis >= timeoutDuration)) {
         lastDecoded = false;
-
         byte value = toValue(lastReceived);
         if(value != 255) handler(value, false);
 
